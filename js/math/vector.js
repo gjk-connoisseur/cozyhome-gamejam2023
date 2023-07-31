@@ -9,6 +9,7 @@
 // im going to continue keeping a glsl-type declaration 
 // for compability reasons in the event older projects
 // will migrate -DC @ 9/3/22
+
 //vec2
 const zero2 = ()   => new vec2(0,0);
 const copy2 = (v)  => new vec2(v.x(),v.y());
@@ -96,9 +97,7 @@ const clamp = (t,a=0,b=1) => {
 	if(t > b) return b;
 	return t;
 }
-const min=(a,b)=> {
-	return (a < b) ? a : b;
-}
+const min=(a,b)=> { return (a < b) ? a : b; }
 // determinant of 2x2
 const DET_2D=(v,w)=> { return v.x()*w.y() - v.y()*w.x(); }
 // sign test for edge (a,b) and point c, with sign s used

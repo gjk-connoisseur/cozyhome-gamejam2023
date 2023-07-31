@@ -4,7 +4,6 @@
 // AND TELL THEM THAT IT IS LACKING!!!!!!!!!!
 // -DC @ November 2nd, 2022.
 
-
 const mIdentity4x4 = () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1];
 
 const mInverse4x4 = (src) => {

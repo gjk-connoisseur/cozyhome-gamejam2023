@@ -21,6 +21,42 @@ p5.RendererGL.prototype._initContext = function() {
 	}
 };
 
+// take a world point to screen coordinates
+const WORLD_TO_NDC=(wp, inv_view, project)=> {
+	const vp = mTransform4x4(inv_view, wp); // w2v
+	const cp = mTransform4x4(project,  vp); // v2p
+	
+// perspective divide
+	const w = (cp[3] + 1.0);
+	for(let i=0;i<3;i++) { cp[i] /= w; }
+
+// we are now in NDC
+	return cp;
+}
+
+// converts from NDC to default coordinate frame
+const NDC_TO_P5SCREEN=(cp, p5b)=> {
+	const w = p5b.width;
+	const h = p5b.height;
+
+	let px = w*(cp[0]/4 + 0.5);
+	let py = h*(0.5 - cp[1]/4);
+	if(px > 0 && px < w && py > 0 && py < h) {
+		p5b.stroke("orange");
+		p5b.strokeWeight(2.0);
+		p5b.circle(px,py,32);
+	}
+	return [px, py];
+}
+
+const WORLD_TO_P5SCREEN=(wp, inv_view, project, p5b)=> {
+// normalized device coordinates
+	const cp = WORLD_TO_NDC(wp, inv_view, project);
+// scale and interpolate to screen
+	const sp = NDC_TO_P5SCREEN(cp, p5b);
+//	console.log(sp);
+}
+
 const CONSTRUCT_DEFAULT_SHADERS=(ctx)=> {
 	let shaders = {};
 // standard vertex/fragment shader for fullbright
@@ -76,9 +112,7 @@ const GL_CREATE_SHADER=(ctx, type, src)=> {
 
 // used in conjunction with GL_CREATE_SHADER to attach a compiled shader to a 
 // program.
-const GL_ATTACH_SHADER=(ctx, program, shader)=> {
-	ctx.attachShader(program, shader);
-}
+const GL_ATTACH_SHADER=(ctx, program, shader)=> { ctx.attachShader(program, shader); }
 // linking a program is the final step in its creation before usage. This is usually
 // used in conjunction with GL_USE_PROGRAM
 const GL_LINK_PROGRAM=(ctx, program)=> {
@@ -220,41 +254,41 @@ const GL_DEBUG_INIT=(ctx, vs, fs)=> {
 
 // construct texture(QOL)
 const GL_CREATE_TEXTURE=(ctx, img, flip=false)=> {
-		const tex = ctx.createTexture();
-		ctx.bindTexture(ctx.TEXTURE_2D, tex);
-		img.loadPixels();
-		const px = img.pixels;
+	const tex = ctx.createTexture();
+	ctx.bindTexture(ctx.TEXTURE_2D, tex);
+	img.loadPixels();
+	const px = img.pixels;
 
-		if(flip) {
-			ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, true);
-		}
+	if(flip) {
+		ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, true);
+	}
 
-		ctx.texImage2D(
-			ctx.TEXTURE_2D, 	// texture 2D type
-			0,					// LEVEL OF DETAIL
-			ctx.RGBA, 			// RGBA format (INTERNAL FORMAT)
-			img.width,			// texture width
-			img.height,			// texture height
-			0,					// border width (must be 0)
-			ctx.RGBA,			// CONVERTED FORMAT
-			ctx.UNSIGNED_BYTE,	// 8 bits per channel (32 bits total)
-			px					// the actual pixels array!
-		);
+	ctx.texImage2D(
+		ctx.TEXTURE_2D, 	// texture 2D type
+		0,					// LEVEL OF DETAIL
+		ctx.RGBA, 			// RGBA format (INTERNAL FORMAT)
+		img.width,			// texture width
+		img.height,			// texture height
+		0,					// border width (must be 0)
+		ctx.RGBA,			// CONVERTED FORMAT
+		ctx.UNSIGNED_BYTE,	// 8 bits per channel (32 bits total)
+		px					// the actual pixels array!
+	);
 
 // x coordinate of texture will clamp to edge
-		ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);
+	ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);
 // y coordinate of texture will clamp to edge
-		ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);
+	ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);
 // texture minification filter (when far away)
-		ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.NEAREST);
+	ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.NEAREST);
 // texture maxification filter (when close by)
-		ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.NEAREST);
+	ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.NEAREST);
 
-		if(flip) {
-			ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, false);
-		}
+	if(flip) {
+		ctx.pixelStorei(ctx.UNPACK_FLIP_Y_WEBGL, false);
+	}
 
-		return tex;
+	return tex;
 }
 
 // simple test func

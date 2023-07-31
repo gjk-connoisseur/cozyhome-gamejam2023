@@ -74,16 +74,16 @@ class OctreeNode {
 // depth for this node
 	#_depth;
 // bounding box
-	#_aabb;
+	#_bbox;
 
 // depedency: relies on the parent object (or whomever is allocating)
 // to know what its span will be before construction.
-	constructor(parent, aabb) {
+	constructor(parent, bbox) {
 // initialize to empty list for now
 		this.#_children = [];
 		this.#_entities = [];
 // set our bounding box
-		this.#_aabb = aabb;
+		this.#_bbox = bbox;
 // remember our parent
 		this.#_parent = parent;
 // calculate our depth immediately
@@ -95,7 +95,7 @@ class OctreeNode {
 	parent() { return this.#_parent; }
 	children() { return this.#_children; }
 	entities() { return this.#_entities; }
-	aabb() { return this.#_aabb; }
+	bbox() { return this.#_bbox; }
 }
 
 // stores component bbox and matrix transform
@@ -235,6 +235,7 @@ const UPDATE_AABB_OBB=(aabb, obb, m)=> {
 	const maxy = wcen._y + wext._y;
 	const minz = wcen._z - wext._z;
 	const maxz = wcen._z + wext._z;
+
 // reassign all new mins and maxes computed
 	aabb.bind(minx,maxx,miny,maxy,minz,maxz);
 }

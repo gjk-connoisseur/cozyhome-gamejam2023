@@ -57,7 +57,6 @@ const CONSTRUCTOR_P5GL_FSE=(fsm,p5gl,man,init)=> {
 		ent.man.onKey=(kc)=>{};
 		ent.man.mouseOut=()=>{};
 		ent.man.mouseOver=()=>{};
-		ent.man.onFudge=(v)=>{};
 		p5gl.p5c.mouseOut(()=>ent.man.mouseOut());
 		p5gl.p5c.mouseOver(()=>ent.man.mouseOver());
 	});
@@ -79,9 +78,7 @@ const FLUSH_GL=(p5gl)=> {
 }
 
 function preload() {
-	loadImage("images/stone.png", (img)=> {
-		IMG = img;
-	});
+	loadImage("images/stone.png", (img)=> { IMG = img; });
 }
 
 function setup() {
@@ -114,10 +111,11 @@ const NSE_FSM = new FSM([{
 		const ctx = p5gl.ctx;	// drawingContext
 
 // generate view context		
-		VIEW = new ViewContext3D(new vec3(0.5,0.5,0.5), new vec3(0,0,0));
+		VIEW = new ViewContext3D(new vec3(0,0,0), new vec3(0,0,0));
 
-		OBB_OBJ = new OBB(-1,1,-1,1,-1,1, mIdentity4x4());
+		OBB_OBJ    = new OBB(-.5,.5,-.5,.5,-.5,.5, mIdentity4x4());
 		GL_BOX_OBJ = new GL_BBox(ctx, OBB_OBJ.obb_box(), [1,0,0]);
+
 // overrides
 		man.onClick=(mv)=> {
 			if(mouseButton == LEFT) {}
@@ -142,15 +140,23 @@ const NSE_FSM = new FSM([{
 // let mv = new vec2(mouseX, mouseY);
 		this.move(fsm,man);
 
-		const V = mInverse4x4(view_matrix);					// view
+		const V = mInverse4x4(VIEW.mat());					// view
 		const P = GL_DEBUG_PERSPECTIVE(width,height,100);	// perspective
 	
+		OBB_OBJ.transform(mRoty4x4(deltaTime/1000));
+
 		DRAW_GL_OBB(ctx, 
 			p5gl.shaders["lines"].program,
 			p5gl.shaders["points"].program,
-			OBB_OBJ,
-			GL_BOX_OBJ,
-			V, P
+			OBB_OBJ, GL_BOX_OBJ,
+			V, P,
+			true
+		);
+	
+		WORLD_TO_P5SCREEN(
+			new vec3(0,0,0).f4d(), // world origin
+			V, P,
+			p5b
 		);
 	},
 	move:function(fsm,man) {

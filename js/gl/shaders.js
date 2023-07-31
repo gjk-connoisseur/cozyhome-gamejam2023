@@ -7,7 +7,8 @@
 const DRAW_GL_OBB=(ctx, lines_s, points_s, 
 		obb, gl_box, 
 		inv_view, project, 
-		c1=[1,0,0], c2=[0,1,0], draw_aabb=false)=> {
+		draw_aabb=false,
+		c1=[1,0,0], c2=[0,1,0])=> {
 	GL_BOX_OBJ.write_colors(ctx, c1);
 	GL_BOX_OBJ.write_points(ctx, OBB_OBJ.obb_box());
 	GL_BOX_OBJ.upload(ctx);
@@ -137,7 +138,6 @@ class GL_BBox {
 				this._verts[vi + i + 3] = color[i];
 			}
 		}
-		console.log(this._verts);
 	}
 // updates the values in the vertex mesh accordingly
 	write_points=(ctx, bbox)=> {
@@ -196,6 +196,7 @@ const POINT_VERTEX_SHADER = `#version 300 es
 
 	void main() {
 		float div = 1.0;
+
 		vec4 pos = uViewMatrix * uMatrix * vec4(aPos, 1.);
 		gl_Position = (uProject * pos) * vec4(1., 1., 1., 1. + div);
 		gl_PointSize = uPointSize;
@@ -262,10 +263,9 @@ const DEFAULT_VERTEX_SHADER = `#version 300 es
 
 // transformations
 	uniform mat4  uViewMatrix, uMatrix, uInvMatrix, uProject;
-	uniform float uFudgeFactor;
 
 	void main() {
-		float div = uFudgeFactor;
+		float div = 1.0;
 
 		vec4 pos = uViewMatrix * uMatrix * vec4(aPos, 1.);
 
