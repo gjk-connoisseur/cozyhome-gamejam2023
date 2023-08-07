@@ -21,13 +21,32 @@ p5.RendererGL.prototype._initContext = function() {
 	}
 };
 
+const P5SCREEN_TO_VIEW_DIR=(p, p5b, view)=> {
+	const rto = p5b.width/p5b.height;
+// transforms from p5's coordinate frame to NDC
+	p = P5SCREEN_TO_NDC(p, p5b, 0);
+	p[0] *= (rto) * .5;
+	p[1] *= .5;
+	return mTransform4x4(view, p);
+}
+
+// takes a screen coordinate and transforms it into NDC
+const P5SCREEN_TO_NDC=(p, p5b, t=0)=> {
+	const w = p5b.width;
+	const h = p5b.height;
+
+	p[0] = (2*p[0]/w) - 1;
+	p[1] = 1 - (2*p[1]/h);
+	return [p[0],p[1],1,t];
+}
+
 // take a world point to screen coordinates
 const WORLD_TO_NDC=(wp, inv_view, project)=> {
 	const vp = mTransform4x4(inv_view, wp); // w2v
 	const cp = mTransform4x4(project,  vp); // v2p
 	
 // perspective divide
-	const w = (cp[3] + 1.0);
+	const w = cp[3];
 	for(let i=0;i<3;i++) { cp[i] /= w; }
 
 // we are now in NDC
@@ -39,22 +58,14 @@ const NDC_TO_P5SCREEN=(cp, p5b)=> {
 	const w = p5b.width;
 	const h = p5b.height;
 
-	let px = w*(cp[0]/4 + 0.5);
-	let py = h*(0.5 - cp[1]/4);
-	if(px > 0 && px < w && py > 0 && py < h) {
-		p5b.stroke("orange");
-		p5b.strokeWeight(2.0);
-		p5b.circle(px,py,32);
-	}
-	return [px, py];
+	return [w*(cp[0]/4 + 0.5), h*(0.5 - cp[1]/4)];
 }
 
 const WORLD_TO_P5SCREEN=(wp, inv_view, project, p5b)=> {
 // normalized device coordinates
 	const cp = WORLD_TO_NDC(wp, inv_view, project);
 // scale and interpolate to screen
-	const sp = NDC_TO_P5SCREEN(cp, p5b);
-//	console.log(sp);
+	return NDC_TO_P5SCREEN(cp, p5b);
 }
 
 const CONSTRUCT_DEFAULT_SHADERS=(ctx)=> {

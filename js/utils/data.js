@@ -98,6 +98,26 @@ class OctreeNode {
 	bbox() { return this.#_bbox; }
 }
 
+// i want a recursively assigned spatial hashing architecture that
+// hashes 3-tuples into string buckets. Operating similar to that of
+// an octree:
+
+// INSERT (ROOT, X,Y,Z, OBJ):
+	// LOOK INTO BUCKET(X,Y,Z) AT ROOT
+		// IF HASH(BUCKET(X,Y,Z)) IS MAP:
+			// INSERT (HASH(BUCKET(X,Y,Z), X,Y,Z, OBJ)
+		// ELSE
+			// IF | HASH(BUCKET(X,Y,Z) | > 4 && ROOT.DEPTH() < 4:
+				// LET CHILDREN = HASH(BUCKET(X,Y,Z));
+				// HASH(BUCKET(X,Y,Z)) = NEW NODE(ROOT, SPAN / 2);
+				// FOR(LET I=0;I<CHILDREN.LENGTH;I++) {
+					// INSERT(HASH(BUCKET(X,Y,Z)), X,Y,Z, OBJ);
+				//}
+			// ELSE:
+				// HASH(BUCKET(X,Y,Z)).PUSH(HASH(X,Y,Z), OBJ);
+// tl;dr
+
+
 // stores component bbox and matrix transform
 class OBB {
 	#_obb_box;

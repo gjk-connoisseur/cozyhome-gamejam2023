@@ -9,6 +9,7 @@ let NSE_E; 		// program entity
 let VIEW;		// view context
 
 let ACTIVE;		// is active
+let LOCKED;		// mouse locked
 
 let OBB_OBJ;
 let GL_BOX_OBJ;
@@ -16,12 +17,18 @@ let GL_BOX_OBJ;
 function mousePressed() {
 	const mv = new vec2(mouseX, mouseY);
 	NSE_E.man.onClick(mv);
-	if(ACTIVE) { requestPointerLock(); }
+	if(ACTIVE) { 
+		requestPointerLock(); 
+		LOCKED = true;
+	}
 	if(!ACTIVE) ACTIVE = true;
 }
 
 function keyPressed() { 
-	if(keyCode == 27) ACTIVE = false;
+	if(keyCode == 27) {
+		ACTIVE = false;
+		LOCKED = false;
+	}
 	if(ACTIVE) NSE_E.man.onKeyTyped(keyCode);
 }
 
@@ -82,9 +89,12 @@ function preload() {
 }
 
 function setup() {
+	const iw = windowWidth*.8;
+	const ih = iw*4/5;
+
 	GENERATE_VOXEL_MESH();
 	MESH = CUBE_MESH();
-	P5GL = BOOTSTRAP_P5GL(1280,720,1280/4,720/4);
+	P5GL = BOOTSTRAP_P5GL(iw,ih,iw/2,ih/2);
 	NSE_E = CONSTRUCTOR_P5GL_FSE(NSE_FSM, P5GL);
 }
 
@@ -97,7 +107,6 @@ const NSE_FSM = new FSM([{
 	key:'init',
 	setup:function(fsm,man) {},
 	enter:function(prev,fsm,man) {
-		man.fudge = 1;
 		fsm.cswitch(man, 'nse');
 	},
 	exit:function(next,fsm,man) {},
@@ -140,30 +149,47 @@ const NSE_FSM = new FSM([{
 // let mv = new vec2(mouseX, mouseY);
 		this.move(fsm,man);
 
-		const V = mInverse4x4(VIEW.mat());					// view
+		const V = VIEW.mat();								// view
 		const P = GL_DEBUG_PERSPECTIVE(width,height,100);	// perspective
+
+		const IV = mInverse4x4(V);
+
+		let mv = [mouseX, mouseY];
+		if(LOCKED) {
+			mv[0] = width/2;
+			mv[1] = height/2;
+		}
+
+		let wd = P5SCREEN_TO_VIEW_DIR(mv, p5b, V);
+		let wd_v3 = new vec3(...wd);
 	
-		OBB_OBJ.transform(mRoty4x4(deltaTime/1000));
+		let hit_axial = line_intersect_axial(VIEW.pos(), wd_v3, OBB_OBJ.aabb_box());
+		let hit_orien = line_intersect_oriented(VIEW.pos(), wd_v3, 
+			mInverse4x4(OBB_OBJ.l2w()), OBB_OBJ.obb_box()
+		);
+
+		let wp = add3(VIEW.pos(), mul3(hit_orien.toi, wd_v3));
+		let sp = WORLD_TO_P5SCREEN(wp.f4d(), IV, P, p5b);
+
+		p5b.circle(sp[0],sp[1],64/(hit_orien.toi*hit_orien.toi));
+		p5b.circle(sp[0],sp[1],32/(hit_orien.toi*hit_orien.toi));
 
 		DRAW_GL_OBB(ctx, 
 			p5gl.shaders["lines"].program,
 			p5gl.shaders["points"].program,
 			OBB_OBJ, GL_BOX_OBJ,
-			V, P,
-			true
+			IV, P,
+			true,
+			hit_orien.toi < Number.POSITIVE_INFINITY ? [120,120,0] : [255,0,0],
+			hit_axial.toi < Number.POSITIVE_INFINITY ? [120,0,120] : [0,255,0]
 		);
-	
-		WORLD_TO_P5SCREEN(
-			new vec3(0,0,0).f4d(), // world origin
-			V, P,
-			p5b
-		);
+
 	},
 	move:function(fsm,man) {
 		const dt = deltaTime/1000;
 		if(ACTIVE) {
 			VIEW.mouselook(16 * dt, movedX, movedY);
-			VIEW.move(16 * dt);
+			VIEW.move(8 * dt);
 			VIEW.orbit(new vec3(0.5,-0.5,8.0));
 		}
 	}
