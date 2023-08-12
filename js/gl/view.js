@@ -34,7 +34,7 @@ class ViewContext3D {
 			this.rgt()  		 // right
 		);
 
-		const MAX_VERTICAL = 80;
+		const MAX_VERTICAL = 85;
 		if(x_angle + dx > MAX_VERTICAL) {
 			dx = MAX_VERTICAL - x_angle;
 		}else if(x_angle + dx < -MAX_VERTICAL) {
@@ -48,6 +48,9 @@ class ViewContext3D {
 // construct input vector and transform it along the basis of cm
 		let wish = new vec3(0,0,0);
 	
+		if(keyIsDown(81)) wish._y += 1;
+		if(keyIsDown(69)) wish._y -= 1;
+
 		if(keyIsDown(87)) wish._z += 1; // W
 		if(keyIsDown(83)) wish._z -= 1; // S
 
@@ -60,10 +63,19 @@ class ViewContext3D {
 // convert vec3 type to vec4 direction, transform and add
 // to current matrix
 		let pos = this.#_cm.getvec(3);
-		pos = add3(
-			pos, add3(mul3(wish._z, this.fwd()),
-					  mul3(wish._x, this.rgt()))
-		);
+		const f = this.fwd();
+		const r = this.rgt();
+		const u = this.up();
+	
+		pos._x += (f._x*wish._z + r._x*wish._x /*u._x**/);
+		pos._y += (f._y*wish._z + r._y*wish._x + /*u._y**/wish._y);
+		pos._z += (f._z*wish._z + r._z*wish._x /*u._z**/);
+
+//		pos = add3(
+//			pos, 
+//				add3(mul3(wish._z, this.fwd()),
+//				mul3(wish._x, this.rgt()))
+//		);
 		this.#_cm.setcol(3, pos.f4d());
 	}
 	orbit=(pos)=> {

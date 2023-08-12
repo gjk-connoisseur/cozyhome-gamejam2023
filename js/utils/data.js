@@ -115,7 +115,6 @@ class OctreeNode {
 				//}
 			// ELSE:
 				// HASH(BUCKET(X,Y,Z)).PUSH(HASH(X,Y,Z), OBJ);
-// tl;dr
 
 
 // stores component bbox and matrix transform

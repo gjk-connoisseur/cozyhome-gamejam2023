@@ -4,6 +4,46 @@
 // draw things to the screen
 // -DC @ 7/22/23
 
+const DRAW_GL_TRIAD=(ctx, lines_s, gl_triad, model, inv_view, project)=> {
+	const BPE = Float32Array.BYTES_PER_ELEMENT;
+	const vert_size = 6;
+	
+	ctx.useProgram(lines_s);
+	gl_triad.bind(ctx);
+// draw the grid lines
+	GL_DEFAULT_ATTR(ctx, lines_s);
+	GL_SET_MVP(ctx, lines_s, model, inv_view, project);
+// initiate draw call sequence
+	gl_triad.draw(ctx);
+}
+
+const DRAW_GL_BOARD=(ctx, lines_s, points_s, 
+		gl_board, model, inv_view, project,
+		draw_points=false)=> {
+	const BPE = Float32Array.BYTES_PER_ELEMENT;
+	const vert_size = 6;
+
+	ctx.useProgram(lines_s);
+	gl_board.bind(ctx);
+
+	GL_DEFAULT_ATTR(ctx, lines_s);
+	GL_SET_MVP(ctx, lines_s, model, inv_view, project);
+// draw edges using the edge shaders
+	gl_board.draw_edges(ctx);
+
+	if(!draw_points) return;
+// we'll need to context switch to the points program
+// in order to draw the vertices
+	ctx.useProgram(points_s);
+	gl_board.bind(ctx);
+
+	GL_DEFAULT_ATTR(ctx, points_s);
+	GL_SET_UNIFORM(ctx, points_s, '1f', 'uPointSize', 16.0);
+	GL_SET_MVP(ctx, points_s, model, inv_view, project);
+// draw points using point shaders
+	gl_board.draw_points(ctx);
+}
+
 const DRAW_GL_OBB=(ctx, lines_s, points_s, 
 		obb, gl_box, 
 		inv_view, project, 
@@ -13,18 +53,14 @@ const DRAW_GL_OBB=(ctx, lines_s, points_s,
 	GL_BOX_OBJ.write_points(ctx, OBB_OBJ.obb_box());
 	GL_BOX_OBJ.upload(ctx);
 		
-	DRAW_GL_BOX(ctx, lines_s, points_s,
-		gl_box, OBB_OBJ.l2w(), inv_view, project
-	);
+	DRAW_GL_BOX(ctx, lines_s, points_s, gl_box, OBB_OBJ.l2w(), inv_view, project);
 
 	if(draw_aabb) {
 		GL_BOX_OBJ.write_colors(ctx, c2);
 		GL_BOX_OBJ.write_points(ctx, OBB_OBJ.aabb_box());
 		GL_BOX_OBJ.upload(ctx);
 
-		DRAW_GL_BOX(ctx, lines_s, points_s,
-			gl_box, mIdentity4x4(), inv_view, project
-		);
+		DRAW_GL_BOX(ctx, lines_s, points_s, gl_box, mIdentity4x4(), inv_view, project);
 	}
 }
 
@@ -33,27 +69,8 @@ const DRAW_GL_BOX=(ctx, lines_s, points_s, gl_box, model, inv_view, project)=> {
 	ctx.useProgram(lines_s);
 	gl_box.bind(ctx, lines_s);
 
-	const BPE = Float32Array.BYTES_PER_ELEMENT;
-	const vert_size = 6;
-// VERTEX ATTRIBUTE STRUCTURE:
-// || ----------- ||
-// ||  X   Y   Z  || -aPos := attribute object-space vertex position		(3 elements)
-// || ----------- || 
-// ||  R   G   B  || -aCol := attribute homogenous-space color				(3 elements)
-// || ----------- ||
-// VERTEX POSITION (XYZ)
-	let aPos = ctx.getAttribLocation(lines_s, 'aPos');
-	let aCol = ctx.getAttribLocation(lines_s, 'aCol');
-
-	ctx.enableVertexAttribArray(aPos);
-	ctx.vertexAttribPointer(aPos, 3, ctx.FLOAT, false, vert_size*BPE, 0*BPE);
-
-	ctx.enableVertexAttribArray(aCol);
-	ctx.vertexAttribPointer(aCol, 3, ctx.FLOAT, false, vert_size*BPE, 3*BPE);
-
-	GL_SET_UNIFORM(ctx, lines_s, 'Matrix4fv', 'uMatrix',	 false, model);
-	GL_SET_UNIFORM(ctx, lines_s, 'Matrix4fv', 'uViewMatrix', false, inv_view);
-	GL_SET_UNIFORM(ctx, lines_s, 'Matrix4fv', 'uProject', 	 false, project);
+	GL_DEFAULT_ATTR(ctx, lines_s);
+	GL_SET_MVP(ctx, lines_s, model, inv_view, project);
 
 // draw edges using the edge shaders
 	gl_box.draw_edges(ctx);
@@ -61,31 +78,158 @@ const DRAW_GL_BOX=(ctx, lines_s, points_s, gl_box, model, inv_view, project)=> {
 // we'll need to context switch to the points program
 // in order to draw the vertices
 	ctx.useProgram(points_s);
-	gl_box.bind(ctx, points_s);
+	gl_box.bind(ctx);
 
-	aPos = ctx.getAttribLocation(points_s, 'aPos');
-	aCol = ctx.getAttribLocation(points_s, 'aCol');
-
-	ctx.enableVertexAttribArray(aPos);
-	ctx.vertexAttribPointer(aPos, 3, ctx.FLOAT, false, vert_size*BPE, 0*BPE);
-
-	ctx.enableVertexAttribArray(aCol);
-	ctx.vertexAttribPointer(aCol, 3, ctx.FLOAT, false, vert_size*BPE, 3*BPE);
-
-	GL_SET_UNIFORM(ctx, points_s, '1f', 'uPointSize', 8.0);
-	GL_SET_UNIFORM(ctx, points_s, 'Matrix4fv', 'uMatrix',	  false, model);
-	GL_SET_UNIFORM(ctx, points_s, 'Matrix4fv', 'uViewMatrix', false, inv_view);
-	GL_SET_UNIFORM(ctx, points_s, 'Matrix4fv', 'uProject', 	  false, project);
+	GL_DEFAULT_ATTR(ctx, points_s);
+	GL_SET_MVP(ctx, points_s, model, inv_view, project);
+	GL_SET_UNIFORM(ctx, points_s, '1f', 'uPointSize', 32.0);
 
 // draw points using the point shaders
 	gl_box.draw_points(ctx);
 }
 
+class GL_Triad {
+	#_verts; // vertices for the gimbal
+	#_edges; // edges for the gimbal
+	#_vbo;   // vertices
+	#_ebo;   // edges
+	constructor(ctx) {
+		const ints_per_edge = 2;
+		const floats_per_vert = 6;
+
+		const num_verts = 6;
+		const num_edges = 3;
+	
+		this.#_verts = new Float32Array(floats_per_vert*num_verts);
+		this.#_edges = new Uint16Array(num_edges*ints_per_edge);
+
+		const write_point=(i,vt)=> {
+			let vi = i*floats_per_vert;
+			for(let j=0;j<floats_per_vert;vi++,j++) {
+				this.#_verts[vi] = vt[j];
+			}
+		}
+// 0 -> [1,0,0], 1 -> [0,1,0], 2 -> [0,0,1]
+		write_point(0, [0,0,0, 1,0,0]);
+		write_point(1, [1,0,0, 1,0,0]);
+		write_point(2, [0,0,0, 0,1,0]);
+		write_point(3, [0,1,0, 0,1,0]);
+		write_point(4, [0,0,0, 0,0,1]);
+		write_point(5, [0,0,1, 0,0,1]);
+
+		this.#_vbo = ctx.createBuffer();
+		this.#_ebo = ctx.createBuffer();
+// ran once and is separate from update:
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bufferData(ctx.ARRAY_BUFFER, this.#_verts, ctx.STATIC_DRAW);
+
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+		ctx.bufferData(ctx.ELEMENT_ARRAY_BUFFER, this.#_edges, ctx.STATIC_DRAW);
+	}
+	draw=(ctx)=> {
+		const floats_per_vert = 6; // num of floats per vertex object	
+		const num_verts = this.#_verts.length / floats_per_vert;
+		ctx.drawArrays(ctx.LINES, 0, num_verts);
+	}
+	bind=(ctx)=> {
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+	}
+}
+
+class GL_Board {
+// topologically a two dimensional manifold
+	#_verts; // vertices of the grid
+	#_edges; // edges of the grid
+	#_vbo;   // vertex buffer object
+	#_ebo;   // element array object
+	#_dim;	 // dimensions of the 
+
+	constructor(ctx, dim, color) {
+		this.#_dim = dim;
+		const dx = (this.#_dim.x()+1)^0, dy = (this.#_dim.y()+1)^0;
+// total number of vertices in a 2D grid given x,y voxels
+		const num_verts = dx*dy;
+		const num_edges = (dx-1)*dy + (dy-1)*dx;
+		const ints_per_edge = 2;
+		const floats_per_vert = 6;
+
+		const write_color=(i,vt)=> {
+			let vi = i*floats_per_vert;
+			for(let j=0;j<3;vi++,j++) {
+				this.#_verts[vi+3] = vt[j];
+			}
+		}
+		const write_point=(i,vt)=> {
+			let vi = i*floats_per_vert;
+			for(let j=0;j<3;vi++,j++) {
+				this.#_verts[vi] = vt[j];
+			}
+		}
+		const write_edge=(i,et)=> {
+			let ei = i*ints_per_edge;
+			for(let j=0; j<ints_per_edge; ei++, j++) {
+				this.#_edges[ei] = et[j];
+			}
+		}
+		this.#_verts = new Float32Array(num_verts*floats_per_vert);
+		this.#_edges = new Uint16Array(num_edges*ints_per_edge);
+
+		this.#_vbo = ctx.createBuffer();
+		this.#_ebo = ctx.createBuffer();
+
+// populate lattice
+		let ix = 0, iy = 0;
+		for(let i=0;i<num_verts;i++) {
+			ix = (i % dx)^0;
+			iy = (i / dy)^0;
+			write_point(i, [ix / (dx-1),iy / (dy-1), 0]);
+			write_color(i, color);
+		}
+// populate edges
+		let ei=0;
+// populate horizontally
+		for(let iy=0;iy<dy;iy++) {
+			for(let ix=0;ix<dx-1;ix++) {
+				let i = iy*dx + ix;
+				write_edge(ei++, [i, i+1]);
+			}
+		}
+// populate vertically
+		for(let ix=0;ix<dx;ix++) {
+			for(let iy=0;iy<dy-1;iy++) {
+				let i = iy*dx + ix;
+				write_edge(ei++, [i, i + dx]);
+			}
+		}
+// ran once and is separate from update:
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bufferData(ctx.ARRAY_BUFFER, this.#_verts, ctx.STATIC_DRAW);
+
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+		ctx.bufferData(ctx.ELEMENT_ARRAY_BUFFER, this.#_edges, ctx.STATIC_DRAW);
+	}
+/* draw calls assume context switches have already occured via bind(...) */
+	draw_edges=(ctx)=> {
+		const num_edges = this.#_edges.length;
+		ctx.drawElements(ctx.LINES, num_edges, ctx.UNSIGNED_SHORT, 0);
+	}
+	draw_points=(ctx)=> {
+		const floats_per_vert = 6; // num of floats per vertex object	
+		const num_verts = this.#_verts.length / floats_per_vert;
+		ctx.drawArrays(ctx.POINTS, 0, num_verts);
+	}
+	bind=(ctx)=> {
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+	}
+}
+
 class GL_BBox {
-	_verts; // vertices of the AABB (x,y,z,r,g,b)
-	_edges; // edges of the AABB (e0, e1)
-	_vbo;   // vertex array object
-	_ebo;   // element array object
+	#_verts; // vertices of the AABB (x,y,z,r,g,b)
+	#_edges; // edges of the AABB (e0, e1)
+	#_vbo;   // vertex array object
+	#_ebo;   // element array object
 
 	constructor(ctx, bbox, color) {
 		const min = bbox.min();
@@ -98,21 +242,21 @@ class GL_BBox {
 		const num_edges = 12;
 		const ints_per_edge = 2;
 
-		this._verts = new Float32Array(num_verts*floats_per_vert);
-		this._edges = new Uint16Array(num_edges*ints_per_edge);
-		this._vbo = ctx.createBuffer();
-		this._ebo = ctx.createBuffer();
+		this.#_verts = new Float32Array(num_verts*floats_per_vert);
+		this.#_edges = new Uint16Array(num_edges*ints_per_edge);
+		this.#_vbo = ctx.createBuffer();
+		this.#_ebo = ctx.createBuffer();
 
 		this.write_points(ctx, bbox);
 		this.write_colors(ctx, color);
 // ran once and is separate from update:
-		ctx.bindBuffer(ctx.ARRAY_BUFFER, this._vbo);
-		ctx.bufferData(ctx.ARRAY_BUFFER, this._verts, ctx.STATIC_DRAW);
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bufferData(ctx.ARRAY_BUFFER, this.#_verts, ctx.STATIC_DRAW);
 
 		const write_edge=(i,et)=> {
 			let ei = i*ints_per_edge;
 			for(let j=0; j<ints_per_edge; ei++, j++) {
-				this._edges[ei] = et[j];
+				this.#_edges[ei] = et[j];
 			}
 		}
 // form chains along AABB
@@ -127,15 +271,15 @@ class GL_BBox {
 			write_edge(8+i, [i, i+4]);
 		}
 
-		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this._ebo);
-		ctx.bufferData(ctx.ELEMENT_ARRAY_BUFFER, this._edges, ctx.STATIC_DRAW);
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+		ctx.bufferData(ctx.ELEMENT_ARRAY_BUFFER, this.#_edges, ctx.STATIC_DRAW);
 	}
 	write_colors=(ctx, color)=> {
 		const floats_per_vert = 6; // num of floats per vertex object	
 		const num_verts = 8; // num of vertices total
 		for(let vi = 0; vi < floats_per_vert * num_verts; vi += floats_per_vert) {
 			for(let i=0;i<3;i++) {
-				this._verts[vi + i + 3] = color[i];
+				this.#_verts[vi + i + 3] = color[i];
 			}
 		}
 	}
@@ -149,7 +293,7 @@ class GL_BBox {
 		const write_point=(i,vt)=> {
 			let vi = i*floats_per_vert;
 			for(let j=0;j<3;vi++,j++) {
-				this._verts[vi] = vt[j];
+				this.#_verts[vi] = vt[j];
 			}
 		}
 
@@ -164,8 +308,8 @@ class GL_BBox {
 		write_point(7, [ min.x(), max.y(), max.z() ]); // 7
 	}
 	upload=(ctx)=> {
-		ctx.bindBuffer(ctx.ARRAY_BUFFER, this._vbo);
-		ctx.bufferSubData(ctx.ARRAY_BUFFER, 0, this._verts);
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bufferSubData(ctx.ARRAY_BUFFER, 0, this.#_verts);
 	}
 /* draw calls assume context switches have already occured via bind(...) */
 	draw_edges=(ctx)=> {
@@ -177,8 +321,8 @@ class GL_BBox {
 		ctx.drawArrays(ctx.POINTS, 0, num_verts);
 	}
 	bind=(ctx)=> {
-		ctx.bindBuffer(ctx.ARRAY_BUFFER, this._vbo);
-		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this._ebo);
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
 	}
 }
 
@@ -199,7 +343,7 @@ const POINT_VERTEX_SHADER = `#version 300 es
 
 		vec4 pos = uViewMatrix * uMatrix * vec4(aPos, 1.);
 		gl_Position = (uProject * pos) * vec4(1., 1., 1., 1. + div);
-		gl_PointSize = uPointSize;
+		gl_PointSize = uPointSize / pos.z;
 	
 		vAlbedo = aCol;
 	}`;
@@ -295,3 +439,28 @@ const DEFAULT_FRAGMENT_SHADER = `#version 300 es
 		fragColor = vec4(diffuse, 1.);
 	}`;
 
+const GL_DEFAULT_ATTR=(ctx, prog_s)=> {
+	const BPE = Float32Array.BYTES_PER_ELEMENT;
+	const vert_size = 6;
+// VERTEX ATTRIBUTE STRUCTURE:
+// || ----------- ||
+// ||  X   Y   Z  || -aPos := attribute object-space vertex position		(3 elements)
+// || ----------- || 
+// ||  R   G   B  || -aCol := attribute homogenous-space color				(3 elements)
+// || ----------- ||
+// VERTEX POSITION (XYZ)
+	const aPos = ctx.getAttribLocation(prog_s, 'aPos');
+	const aCol = ctx.getAttribLocation(prog_s, 'aCol');
+
+	ctx.enableVertexAttribArray(aPos);
+	ctx.vertexAttribPointer(aPos, 3, ctx.FLOAT, false, vert_size*BPE, 0*BPE);
+
+	ctx.enableVertexAttribArray(aCol);
+	ctx.vertexAttribPointer(aCol, 3, ctx.FLOAT, false, vert_size*BPE, 3*BPE);
+}
+
+const GL_SET_MVP=(ctx, prog_s, model, inv_view, project)=> {
+	GL_SET_UNIFORM(ctx, prog_s, 'Matrix4fv', 'uMatrix',	 	false, model);
+	GL_SET_UNIFORM(ctx, prog_s, 'Matrix4fv', 'uViewMatrix', false, inv_view);
+	GL_SET_UNIFORM(ctx, prog_s, 'Matrix4fv', 'uProject', 	false, project);
+}
