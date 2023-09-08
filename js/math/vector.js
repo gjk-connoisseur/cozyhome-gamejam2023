@@ -203,7 +203,7 @@ const ref3 = (v,n) => {
 }
 const proj3 = (v,w) => {
 	const ww = dot3(w,w);
-	if(wv < 0.0001) return w;
+	if(ww < 0.0001) return w;
 	const vw = dot3(v,w);
 	return mul3(vw/ww, w);
 }

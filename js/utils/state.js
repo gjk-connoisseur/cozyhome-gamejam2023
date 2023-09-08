@@ -43,7 +43,7 @@ class FSM {
 // append all new states to dictionary object
 		for(let i = 0;i < states.length;i++) {
 			const state = states[i];
-			this.vstate(state, "state object was not constructed properly. see fsm.js.");
+			this.vstate(state);
 			this.#_dict[state.key] = state;
 		}
 	}
@@ -79,12 +79,13 @@ class FSM {
 	}
 	sget=(key)=> key in this.#_dict ? this.#_dict[key] : null;
 	assert(cond, output) { if(!cond) throw new Error("assertion failed:" + output); }
+
 	vstate(state) { // determine if new state object has the required components
-		return Object.hasOwn(state, 'key') &&
-			Object.hasOwn(state, 'enter') &&
-			Object.hasOwn(state, 'exit') &&
-			Object.hasOwn(state, 'setup') &&
-			Object.hasOwn(state, 'pulse');
+		if(!state.key) throw new Error("key not defined for state: " + state);
+		if(!state.enter) state.enter = (prev,fsm,man) => {};
+		if(!state.exit) state.exit = (next,fsm,man) => {};
+		if(!state.setup) state.setup = (fsm,man) => {};
+		if(!state.pulse) state.pulse = (fsm,man) => {};
 	}
 }
 

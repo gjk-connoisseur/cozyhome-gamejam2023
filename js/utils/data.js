@@ -1,4 +1,3 @@
-
 const ITERATE_QUEUE=(queue, yoink)=> {
 	if(!queue.head()) return; // is queue null?
 	let dummy=queue.head().get_next();
@@ -122,8 +121,8 @@ class OBB {
 	#_obb_box;
 	#_aabb_box;
 	#_l2w;
-	constructor(minx=0,maxx=0,miny=0,maxy=0,minz=0,maxz=0, l2w) {
-		this.#_l2w = l2w;
+	constructor(minx=0,maxx=0,miny=0,maxy=0,minz=0,maxz=0,l2w=null) {
+		this.#_l2w = l2w == null ? mIdentity4x4() : l2w;
 		this.#_obb_box = new BBox(minx,maxx,miny,maxy,minz,maxz);
 		this.#_aabb_box = AABB_FROM_OBB(this.#_obb_box, this.#_l2w);
 	}
@@ -272,25 +271,189 @@ const SUPPORT_OBB=(v,set)=> {
 	return mv;
 }
 
-class Mesh {
-// vertex list (not a Float32Array)
-	#_verts;
-// triangles list (not a UInt32Array)
-	#_tris;
-// WebGL2Program
-	#_prog;
-	
-	constructor(verts, tris, prog) {
-		this.#_verts = verts;
-		this.#_tris  = tris;
-		this.#_prog  = prog;
-	}
+class WingedVertex {
+	pos; // v3
+	egs; // edge array
+	constructor(pos) { this.pos = pos; this.egs = []; }
+	push_edge(edge) { this.egs.push(edge); }
 }
 
-class Island {
-// display information (shader + vertices + tris)
-	#_mesh;
-// axis aligned bounding box
-	#_aabb;
+class WingedEdge {
+	next; // next edge in chain
+	twin; // dual of edge going in opposite direction
+	face; // map to one of the two bounding faces in 3D
+	vert; // map from edge to Z (vertex index)
+	orient; // +1: outside chain, -1: inside chain
 	constructor() { }
+}
+
+class WingedFace {
+	normal;
+	constructor(normal) { this.normal = normal; }
+}
+
+const ITERATE_WEDGES=(hep, yoink=(edge)=>{})=> {
+	const pts = hep.pts;
+// copy edges with a hash bleed into edge structure.
+	const eset = new Set();
+	const vqueue = new Queue();
+	let count = 0;
+// push vertices into queue..
+	for(let i=0;i<pts.length;i++) { vqueue.push(i); }
+	do {
+// get the vertex associated with index i
+		const vid = vqueue.pop();
+		const vertex = pts[vid];
+
+// bleed into its neighbors
+		const egs = vertex.egs;
+
+// do it along the vertices instead :)!
+		count = 0;
+		for(let i=0;i<egs.length;i++) {
+// next vertex index
+			const nvi = egs[i].vert; 
+
+			const e_str = vid > nvi ? `${nvi}_${vid}` : `${vid}_${nvi}`;
+// if the edge map does not contain either directed edge, insert:
+			if(!eset.has(e_str)) {
+				eset.add(e_str);
+				vqueue.push(nvi);
+				count++;
+				yoink(egs[i]);
+			}
+		}
+	} while(count != 0);
+}
+
+const ITERATE_WVERTICES=(hep, yoink=(vid, vertex)=>{})=> {
+	const pts = hep.pts;
+// copy edges with a hash bleed into edge structure.
+	const vset = new Set();
+	const vqueue = new Queue();
+	let count = 0;
+// push vertices into queue..
+	for(let i=0;i<pts.length;i++) { vqueue.push(i); }
+	do {
+// get the vertex associated with index i
+		const vid = vqueue.pop();
+		const vertex = pts[vid];
+
+// bleed into its neighbors
+		const egs = vertex.egs;
+
+		count = 0;
+		if(!vset.has(vid)) {
+			for(let i=0;i<egs.length;i++) {
+				const nvi = egs[i].vert;  // next vertex
+				vqueue.push(nvi);
+				count++;
+			}
+			vset.add(vid);
+			yoink(vid, vertex);
+		}
+	} while(count != 0);
+}
+
+const COMPUTE_NUM_EDGES=(hep)=> {
+	let num_edges = 0;
+	ITERATE_WEDGES(hep, ()=>{ num_edges++; });
+	return num_edges;
+}
+
+// takes in an half edge polygonal data structure.
+const CONSTRUCT_WIREFRAME=(hep)=> {
+	const pts = hep.pts;
+
+	const num_verts = pts.length;
+
+	const num_velems = 6; // 3 float 32s (xyz), 3 float 32s (rgb)
+	const num_eelms = 2;  // 2 uint16s
+
+	const vlen = num_verts * num_velems; 
+	const elen = COMPUTE_NUM_EDGES(hep) * num_eelms;
+	
+// copy vertices into flat array.
+	const vf32 = new Float32Array(vlen);
+	for(let i=0;i<pts.length;i++) {
+		for(let j=0;j<num_velems;j++) {
+			vf32[num_velems*i + j] = pts[i].pos.at(j);
+		}
+		for(let j=0;j<num_velems;j++) {
+			vf32[3+ num_velems*i + j] = 1.0;
+		}
+	}
+// copy unique edges into flat array.
+	const eu16 = new Uint16Array(elen);
+	let ec = 0;
+	ITERATE_WEDGES(hep, (edge)=> {
+		eu16[num_eelms*ec]   = edge.twin.vert;
+		eu16[num_eelms*ec+1] = edge.vert;
+		ec++;
+	});
+	return { verts: vf32, edges: eu16, vert_size: num_velems };
+}
+
+// constructs the data structures required to represent manifold polygonal data.
+const CONSTRUCT_POLYGON=(n=4,w=1)=> {
+	const ts = 360 / n;
+	const pts = [];	
+	const egs = [];
+// push points to a point array
+	let rv = new vec2(w,0);
+	for(let i=0;i<n;i++) {
+		pts.push(new WingedVertex(new vec3(rv._x, rv._y, 0)));
+		let v = copy2(rv);
+		rv = rot2(ts, rv);
+	}
+
+	let edge = new WingedEdge();
+	for(let i=0;i<n;i++) {
+		egs.push(edge);
+		edge.orient = 1;
+		edge.vert = (i+1) % n;
+// don't construct a new edge. we are looping
+		if(i == n-1) {
+			edge.next = egs[0];
+		}else {
+			edge.next = new WingedEdge();
+			edge = edge.next;
+		}
+	}
+// (n*(1 + ~~(i/n)) + i = 5
+	const roll = (i,n)=> {
+		return i >= 0 ? i % n : (1+~~(i/n))*n + i;
+	}
+
+	let tedge = new WingedEdge();
+	for(let i=n-1;i>=0;i--) {
+		egs.push(tedge);
+
+		tedge.orient = -1;
+		tedge.vert = roll(i,n);
+
+		tedge.twin = egs[roll(i,n)];
+		tedge.twin.twin = tedge;
+
+		pts[tedge.twin.vert].push_edge(tedge);
+		pts[tedge.twin.vert].push_edge(tedge.twin.next);
+
+		const p1 = pts[tedge.vert].pos;
+		const p2 = pts[tedge.twin.vert].pos;
+
+		const normal = perp2(sub2(p2,p1));
+
+		tedge.twin.face = new WingedFace(normal);
+		tedge.face = new WingedFace(mul2(-1,normal));
+
+// handle looping
+		if(i == 0) {
+			tedge.next = egs[n].twin;
+		}else {
+			tedge.next = new WingedEdge();
+			tedge = tedge.next;
+		}
+	}
+// graph
+	return { pts: pts, egs:egs, root:egs[0] };
 }

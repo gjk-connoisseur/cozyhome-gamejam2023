@@ -11,7 +11,7 @@ class ViewContext3D {
 			this.#_cm.rotz(rot.z()*Math.PI/180);
 		}
 	}
-	mouselook=(ds,mx,my)=> {
+	look=(ds=0,mx=0,my=0)=> {
 // integrate
 		let dx = -my*ds; let dy = mx*ds;
 		const m = this.#_cm.get();
@@ -44,22 +44,17 @@ class ViewContext3D {
 			this.#_cm.rotx(-dx * Math.PI/180);
 		}
 	}
-	move=(ds)=> {
+	orbit=(ds=0,dx=0,dy=0,z=16)=> {
+		const pos = add3(this.pos(), mul3(z, this.fwd()));
+		this.look(ds,dx,dy);
+		const next_pos = add3(pos, mul3(-z, this.fwd()));
+		this.#_cm.setcol(3, next_pos.f4d());
+	}
+	move=(ds=0,dx=0,dy=0,dz=0)=> {
 // construct input vector and transform it along the basis of cm
-		let wish = new vec3(0,0,0);
-	
-		if(keyIsDown(81)) wish._y += 1;
-		if(keyIsDown(69)) wish._y -= 1;
-
-		if(keyIsDown(87)) wish._z += 1; // W
-		if(keyIsDown(83)) wish._z -= 1; // S
-
-		if(keyIsDown(65)) wish._x -= 1; // A
-		if(keyIsDown(68)) wish._x += 1; // D
-
+		let wish = new vec3(dx,dy,dz);
 // keep it unit, then scale
 		wish = mul3(ds, unit3(wish));
-
 // convert vec3 type to vec4 direction, transform and add
 // to current matrix
 		let pos = this.#_cm.getvec(3);
@@ -67,19 +62,28 @@ class ViewContext3D {
 		const r = this.rgt();
 		const u = this.up();
 	
-		pos._x += (f._x*wish._z + r._x*wish._x /*u._x**/);
-		pos._y += (f._y*wish._z + r._y*wish._x + /*u._y**/wish._y);
-		pos._z += (f._z*wish._z + r._z*wish._x /*u._z**/);
+		pos._x += (f._x*wish._z + r._x*wish._x + u._x*wish._y);
+		pos._y += (f._y*wish._z + r._y*wish._x + u._y*wish._y);
+		pos._z += (f._z*wish._z + r._z*wish._x + u._z*wish._y);
 
-//		pos = add3(
-//			pos, 
-//				add3(mul3(wish._z, this.fwd()),
-//				mul3(wish._x, this.rgt()))
-//		);
 		this.#_cm.setcol(3, pos.f4d());
 	}
-	orbit=(pos)=> {
+	pan=(ds=0,mx=0,my=0)=> {
+// construct input vector and transform it along the basis of cm
+		let wish = new vec3(ds*mx,ds*my,0);
+// convert vec3 type to vec4 direction, transform and add
+// to current matrix
+		let pos = this.#_cm.getvec(3);
+		const r = this.rgt();
+		const u = this.up();
+	
+		pos._x += (r._x*wish._x - u._x*wish._y);
+		pos._y += (r._y*wish._x - u._y*wish._y);
+		pos._z += (r._z*wish._x - u._z*wish._y);
+
+		this.#_cm.setcol(3, pos.f4d());
 	}
+
 	bind=(pos,fwd,fov)=> {
 		this.#_cm.setcol(3, [+pos._x,+pos._y,+pos._z, 1]);
 		const rgt = mTD4x4(mRoty4x4(90*Math.PI/180), fwd);

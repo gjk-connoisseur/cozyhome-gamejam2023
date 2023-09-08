@@ -1,8 +1,12 @@
 <!doctype html>
 <html>
     <head>
-        <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/addons/p5.sound.min.js"></script>
+<!-- Bootstrap JS -->
+<!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-HwwvtgBNo3bZJJLYd8oVXjrBZt8cqVSpeBNS5n7C8IVInixGAoxmnlMuBnhbgrkm" crossorigin="anonymous"></script> -->
+<!-- My JS files --> 
+  <!--      <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/p5.js"></script> -->
+<!--        <script src="https://cdn.jsdelivr.net/npm/p5@1.4.2/lib/addons/p5.sound.min.js"></script> -->
+		<script src="../p5/p5.min.js"></script>
 		<script src="js/math/matrix3x3.js"></script>	<!-- mini 3x3 matrix library 	-->
 		<script src="js/math/matrix4x4.js"></script>	<!-- mini 4x4 matrix library 	-->
 		<script src="js/math/vector.js"></script>		<!-- mini vector library 		-->
@@ -10,18 +14,21 @@
 		<script src="js/utils/data.js"></script>		<!-- misc. data library 		-->
 		<script src="js/utils/state.js"></script>		<!-- state machine library 		-->
 		<script src="js/utils/buffers.js"></script>		<!-- helpful buffers			-->
+		<script src="js/utils/camera.js"></script>		<!-- view context library		-->
 		<script src="js/gl/gfx.js"></script>			<!-- graphics library			-->
 		<script src="js/gl/shaders.js"></script>		<!-- graphics library			-->
 		<script src="js/gl/mesh.js"></script>			<!-- mesh library				-->	
 		<script src="js/gl/view.js"></script>			<!-- view context library		-->
         <script src="js/main.js"></script>				<!-- main execution (where p5 instances itself) -->
+        <script src="js/scene.js"></script>				<!-- main execution (where p5 instances itself) -->
         <style></style>
     </head>
+<!-- Bootstrap CSS -->
+<!--    	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-4bw+/aepP/YC94hEpVNVgiZdgIC5+VKNBQNGCHeKRQN+PtmoHDEXuppvnDJzQIu9" crossorigin="anonymous"> -->
     <style>
 		body {
 			background: black;
 			border: none;
-			font-family: Verdana;
 			color:white;
 		}
 		#center_view {
@@ -43,6 +50,9 @@
             text-align: center;
             padding-top: 20px;
         }
+        #overlay {
+    		position: absolute;
+		}
 		.nomargin {
 			margin-top:4px;
 			margin-bottom:4px;
@@ -50,20 +60,16 @@
 		.text {
 			gap:15px;
 			text-align:center;
-		 }
-		hl {
-			color:yellow;
 		}
-		hl2 {
-			color:orange;
-		}
-		hl3 {
-			color:red;
-		}
+		hl { color:yellow; }
+		hl2 { color:orange; }
+		hl3 { color:red; }
 	</style>
     <body>
-			<div id="center_view">
-				<div id="center_flexbox"></div>
+		<div id="center_view">
+			<div id="center_flexbox">
+				<div id="overlay"></div>
 			</div>
+		</div>
 	</body>
 </html>

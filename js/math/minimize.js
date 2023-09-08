@@ -61,7 +61,7 @@ const line_intersect_axial=(p,v,bbox)=>{
 				let j_i = min_ti*v.at(j) + p.at(j);
 				if(j_i < min.at(j) || j_i > max.at(j)) break;
 			}
-// determine the global positive definite minima	
+// determine the global positive definite minima
 			if(j == 3 && min_ti < min_t) {
 				min_t = min_ti;
 				min_e = min_ei;

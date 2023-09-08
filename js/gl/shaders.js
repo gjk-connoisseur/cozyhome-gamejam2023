@@ -4,6 +4,19 @@
 // draw things to the screen
 // -DC @ 7/22/23
 
+const DRAW_GL_WIREFRAME=(ctx, lines_s, point_s, gl_wframe, l2w, iv, p)=> {
+	ctx.useProgram(lines_s);
+	gl_wframe.bind(ctx);
+	GL_DEFAULT_ATTR(ctx, lines_s);
+	GL_SET_MVP(ctx, lines_s, l2w, iv, p);
+	gl_wframe.draw_edges(ctx);
+
+	ctx.useProgram(point_s);
+	GL_DEFAULT_ATTR(ctx, point_s);
+	GL_SET_MVP(ctx, point_s, l2w, iv, p);
+	gl_wframe.draw_points(ctx);
+}
+
 const DRAW_GL_TRIAD=(ctx, lines_s, gl_triad, model, inv_view, project)=> {
 	const BPE = Float32Array.BYTES_PER_ELEMENT;
 	const vert_size = 6;
@@ -38,7 +51,6 @@ const DRAW_GL_BOARD=(ctx, lines_s, points_s,
 	gl_board.bind(ctx);
 
 	GL_DEFAULT_ATTR(ctx, points_s);
-	GL_SET_UNIFORM(ctx, points_s, '1f', 'uPointSize', 16.0);
 	GL_SET_MVP(ctx, points_s, model, inv_view, project);
 // draw points using point shaders
 	gl_board.draw_points(ctx);
@@ -49,16 +61,16 @@ const DRAW_GL_OBB=(ctx, lines_s, points_s,
 		inv_view, project, 
 		draw_aabb=false,
 		c1=[1,0,0], c2=[0,1,0])=> {
-	GL_BOX_OBJ.write_colors(ctx, c1);
-	GL_BOX_OBJ.write_points(ctx, OBB_OBJ.obb_box());
-	GL_BOX_OBJ.upload(ctx);
+	gl_box.write_colors(ctx, c1);
+	gl_box.write_points(ctx, obb.obb_box());
+	gl_box.upload(ctx);
 		
-	DRAW_GL_BOX(ctx, lines_s, points_s, gl_box, OBB_OBJ.l2w(), inv_view, project);
+	DRAW_GL_BOX(ctx, lines_s, points_s, gl_box, obb.l2w(), inv_view, project);
 
 	if(draw_aabb) {
-		GL_BOX_OBJ.write_colors(ctx, c2);
-		GL_BOX_OBJ.write_points(ctx, OBB_OBJ.aabb_box());
-		GL_BOX_OBJ.upload(ctx);
+		gl_box.write_colors(ctx, c2);
+		gl_box.write_points(ctx, obb.aabb_box());
+		gl_box.upload(ctx);
 
 		DRAW_GL_BOX(ctx, lines_s, points_s, gl_box, mIdentity4x4(), inv_view, project);
 	}
@@ -82,7 +94,6 @@ const DRAW_GL_BOX=(ctx, lines_s, points_s, gl_box, model, inv_view, project)=> {
 
 	GL_DEFAULT_ATTR(ctx, points_s);
 	GL_SET_MVP(ctx, points_s, model, inv_view, project);
-	GL_SET_UNIFORM(ctx, points_s, '1f', 'uPointSize', 32.0);
 
 // draw points using the point shaders
 	gl_box.draw_points(ctx);
@@ -112,10 +123,10 @@ class GL_Triad {
 // 0 -> [1,0,0], 1 -> [0,1,0], 2 -> [0,0,1]
 		write_point(0, [0,0,0, 1,0,0]);
 		write_point(1, [1,0,0, 1,0,0]);
-		write_point(2, [0,0,0, 0,1,0]);
-		write_point(3, [0,1,0, 0,1,0]);
-		write_point(4, [0,0,0, 0,0,1]);
-		write_point(5, [0,0,1, 0,0,1]);
+		write_point(2, [0,0,0, 0,0,1]);
+		write_point(3, [0,1,0, 0,0,1]);
+		write_point(4, [0,0,0, 0,1,0]);
+		write_point(5, [0,0,1, 0,1,0]);
 
 		this.#_vbo = ctx.createBuffer();
 		this.#_ebo = ctx.createBuffer();
@@ -134,6 +145,40 @@ class GL_Triad {
 	bind=(ctx)=> {
 		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
 		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+	}
+}
+
+class GL_Wireframe {
+	#_vert_size;
+	#_verts;
+	#_edges;
+	#_vbo;
+	#_ebo;
+	constructor(ctx, poly) {
+		const fdata = CONSTRUCT_WIREFRAME(poly);
+		this.#_vert_size = fdata.vert_size;
+		this.#_verts = fdata.verts;
+		this.#_edges = fdata.edges;
+
+		this.#_vbo = ctx.createBuffer();	// vertex buffer object
+		this.#_ebo = ctx.createBuffer(); // edge element object
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bufferData(ctx.ARRAY_BUFFER, this.#_verts, ctx.STATIC_DRAW);
+
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+		ctx.bufferData(ctx.ELEMENT_ARRAY_BUFFER, this.#_edges, ctx.STATIC_DRAW);
+	}
+	bind=(ctx)=> {
+		ctx.bindBuffer(ctx.ARRAY_BUFFER, this.#_vbo);
+		ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, this.#_ebo);
+	}
+	draw_edges=(ctx)=> {
+		const num_edges = this.#_edges.length;
+		ctx.drawElements(ctx.LINES, num_edges, ctx.UNSIGNED_SHORT, 0);
+	}
+	draw_points=(ctx)=> {
+		const num_verts = this.#_verts.length;
+		ctx.drawArrays(ctx.POINTS, 0, num_verts);
 	}
 }
 
@@ -326,6 +371,13 @@ class GL_BBox {
 	}
 }
 
+const SET_POINT_SIZES=(ctx, progs, size=16.0)=> {
+	for(const shader of Object.values(progs)) {
+		ctx.useProgram(shader.program);
+		GL_SET_UNIFORM(ctx, shader.program, '1f', 'uPointSize', size);
+	}
+}
+
 const POINT_VERTEX_SHADER = `#version 300 es
 	precision mediump float;
 // vertex attrs
@@ -343,7 +395,7 @@ const POINT_VERTEX_SHADER = `#version 300 es
 
 		vec4 pos = uViewMatrix * uMatrix * vec4(aPos, 1.);
 		gl_Position = (uProject * pos) * vec4(1., 1., 1., 1. + div);
-		gl_PointSize = uPointSize / pos.z;
+		gl_PointSize = uPointSize / (1. + gl_Position.w);
 	
 		vAlbedo = aCol;
 	}`;
@@ -392,7 +444,7 @@ const LINE_FRAGMENT_SHADER = `#version 300 es
 	out vec4 fragColor;
 
 	void main() {
-		fragColor = vec4(vAlbedo.xyz, 1.);
+		fragColor = vec4(vAlbedo, 1.);
 	}`;
 
 const DEFAULT_VERTEX_SHADER = `#version 300 es

@@ -46,7 +46,7 @@ const WORLD_TO_NDC=(wp, inv_view, project)=> {
 	const cp = mTransform4x4(project,  vp); // v2p
 	
 // perspective divide
-	const w = cp[3];
+	const w = (cp[3]);
 	for(let i=0;i<3;i++) { cp[i] /= w; }
 
 // we are now in NDC
@@ -58,7 +58,7 @@ const NDC_TO_P5SCREEN=(cp, p5b)=> {
 	const w = p5b.width;
 	const h = p5b.height;
 
-	return [w*(cp[0]/4 + 0.5), h*(0.5 - cp[1]/4)];
+	return [w*(cp[0]/4 + 0.5), h*(0.5 - cp[1]/4), cp[3]];
 }
 
 const WORLD_TO_P5SCREEN=(wp, inv_view, project, p5b)=> {
@@ -214,7 +214,6 @@ const GL_CONSTRUCT_PROGRAM=(ctx, vs, fs)=> {
 	}
 
 	const program 		= GL_CREATE_PROGRAM(ctx);
-
 	const vertex_s 		= GL_CREATE_SHADER(ctx, 'vert', vs);
 	const fragment_s	= GL_CREATE_SHADER(ctx, 'frag', fs);
 
@@ -242,7 +241,7 @@ const GL_CONSTRUCT_PROGRAM=(ctx, vs, fs)=> {
 	}
 }
 
-const GL_DEBUG_INIT=(ctx, vs, fs)=> {
+const GL_DEBUG_INIT=(ctx)=> {
 // set up default program
 	const vert_size	= 8;
 // construct and compile shaders
@@ -302,37 +301,9 @@ const GL_CREATE_TEXTURE=(ctx, img, flip=false)=> {
 	return tex;
 }
 
-// simple test func
-const GL_DEBUG_DRAW=(ctx, mesh, program, mesh_size, vert_size, abuffer, mode, view_matrix, matrix, phong)=> {
-// set uniforms before draw
-	GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uViewMatrix', false, mInverse4x4(view_matrix));
-	GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uMatrix', false, matrix);
-	GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uInvMatrix', false, mInverse4x4(matrix));
-	// GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uProp', false, phong);
-// set vertex attribute data
-	// -> this can be optimized
-	ctx.drawArrays(/*mesh.isTriangles ? */ mode /*: ctx.TRIANGLE_STRIP*/, // render mode
-		0, // first element index
-		(mesh_size / vert_size) // number of vertices to render
-	);
-}
-
-// simple test func
-const GL_DEBUG_ELEMENTS=(ctx, program, tbuffer, tri_count, view_matrix, matrix)=> {
-// set uniforms before draw
-	GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uViewMatrix', false, mInverse4x4(view_matrix));
-	GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uMatrix', false, matrix);
-	GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uInvMatrix', false, mInverse4x4(matrix));
-// GL_SET_UNIFORM(ctx, program, 'Matrix4fv', 'uProp', false, phong);
-// set vertex attribute data
-	ctx.bindBuffer(ctx.ELEMENT_ARRAY_BUFFER, tbuffer);
-	ctx.drawElements(ctx.TRIANGLES, tri_count, ctx.UNSIGNED_SHORT, 0);
-}
-
-
 // taken from MDN documentation
 // https://jsfiddle.net/tatumcreative/86fd797g/
-const GL_DEBUG_PERSPECTIVE=(w,h)=> {
+const GL_PERSPECTIVE=(w=1,h=1)=> {
 	const fov = 0.5;
 	const aspect = w/h;
 	const near = 0.1;
@@ -343,31 +314,34 @@ const GL_DEBUG_PERSPECTIVE=(w,h)=> {
 const GL_PERSPECTIVE_MATRIX=(fov, aspect, near, far)=> {
 	const f = 1 / Math.tan(fov / 2);
 	return [
-		f/aspect,	    0, 						  0, 			0,
-		0,				f,						  0,			0,
-		0,				0,(near + far)/(near - far),	   	    /*handedness*/ 1,
-		0,				0,	2*(near*far/(near-far)),	    	0
+		f/aspect,	0, 						  0, 		0,
+		0,			f,						  0,		0,
+		0,			0,(near + far)/(near - far),	   	1, /*handedness*/
+		0,			0,	2*(near*far/(near-far)),	    0
 	];
 }
 
-const GL_DRAW_WORLD_LINE=(p5b,a,b,w,h,mvp)=> {
-	const sa = GL_WORLD_TO_SCREEN(a,w,h,mvp);
-	const sb = GL_WORLD_TO_SCREEN(b,w,h,mvp);
-// prevents irregular drawing 	
-	p5b.line(sa[0],sa[1],sb[0],sb[1]);
+const GL_ORTHOGRAPHIC=(s=7,w=1,h=1)=> {
+	const aspect = w/h;
+	return GL_ORTHOGRAPHIC_MATRIX(-s*aspect,+s*aspect,-s,+s,0.1,100);
 }
 
-const GL_WORLD_TO_SCREEN=(p,w,h,mvp)=> {
-	const p0 = mTransform4x4(mvp, p);
-
-	const z_ = p0[2]; // depth!
-// perspective divide
-	for(let i=0;i<4;i++) p0[i] /= p0[2];
-
-	p0[0] = (w)*(0.5 - p0[0]/4);
-	p0[1] = (h)*(0.5 + p0[1]/4);
-
-	return p0;
-}
+const GL_ORTHOGRAPHIC_MATRIX=(left, right, bottom, top, near, far)=> {
+// Each of the parameters represents the plane of the bounding box
+    var lr = 1 / (left - right);
+    var bt = 1 / (bottom - top);
+    var nf = 1 / (near - far);
+	
+    var row4col1 = (left + right) * lr;
+    var row4col2 = (top + bottom) * bt;
+    var row4col3 = (far + near) * nf;
+  
+    return [
+       -2 * lr,        0,        0, 0,
+             0,  -2 * bt,        0, 0,
+             0,        0,   2 * nf, 0,
+      row4col1, row4col2, row4col3, 1
+    ];
+  }
 
 //// WEBGL \\\\\\
